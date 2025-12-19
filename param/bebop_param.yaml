@@ -1,0 +1,19 @@
+/**:
+  ros__parameters:
+    # Limits
+    max_tilt_deg: 15.0
+    max_vert_speed: 1.0
+
+    # Gains (Body Frame)
+    kp_xy: 0.15 # ENU
+    ki_xy: 0.006 # ENU
+    kd_xy: 0.002 # ENU
+
+    update_rate: 50.0  # Control loop frequency in Hz
+    cutoff_frequency: 8.0 # Dirty derivative cutoff frequency in Hz
+
+    # Topics
+    odom_topic: "/bebop104/filtered_odom/rho"
+    des_vel_topic: "/bebop104/cmd_vel_des"
+    cmd_vel_topic: "/bebop104/cmd_vel"
+    bebop_mode_topic: "/bebop104/mode"
