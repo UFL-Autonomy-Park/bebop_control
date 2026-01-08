@@ -76,6 +76,8 @@ public:
     }
 
 private:
+    rclcpp::TimerBase::SharedPtr timer_;
+    
     // State
     geometry_msgs::msg::Twist target_vel_world_; // Desired world frame vel
     Eigen::Vector3d current_vel_body_; // Current body frame vel
@@ -224,7 +226,7 @@ private:
         bool sgn_in_matches_sgn_out_X = (sgn_error_x_ == sgn_u_pitch);
         bool sgn_in_matches_sgn_out_Y = (sgn_error_y_ == sgn_u_roll);
         // Check for zero division
-        if (max_tilt_deg_ < 1e-6 || max_vert_speed_ < 1e-6) {
+        if (max_tilt_deg_ < 1e-6 || max_vert_speed_mps_ < 1e-6) {
             RCLCPP_WARN_THROTTLE(this->get_logger(),*this->get_clock(),1000, "Actuator limits are too small");
             stopDrone();
             return;
@@ -241,7 +243,7 @@ private:
         // Normalize
         cmd_vel.linear.x = u_pitch_sat;
         cmd_vel.linear.y = u_roll_sat;
-        cmd_vel.linear.z = std::clamp(target_vel_body.z() / max_vert_speed_,-1.0,1.0);
+        cmd_vel.linear.z = std::clamp(target_vel_body.z() / max_vert_speed_mps_,-1.0,1.0);
         cmd_vel.angular.z = std::clamp(target_vel_world_.angular.y, -1.0,1.0); // Yaw rate command directly
         
         // Check that values are finite
