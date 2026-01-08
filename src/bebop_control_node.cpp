@@ -112,7 +112,6 @@ private:
         target_vel_world_ = *msg;
         last_cmd_time_ = this->now();
         cmd_received_ = true;
-        // controlLoop();
     }
 
     void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
@@ -158,6 +157,14 @@ private:
     }
 
     void controlLoop() {
+        // Do nothing if not in offboard mode (mode 1)
+        if (bebop_mode_ != 1) {
+            // Reset integral terms
+            err_sum_x_ = 0.0;
+            err_sum_y_ = 0.0;
+            return;
+        }
+        
         // Hover if no odom (either never received or stale)
         if (!odom_received_ || (this->now() - last_odom_time_).seconds() > 0.5) {
             stopDrone();
@@ -173,15 +180,6 @@ private:
                 RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Safety Timeout: No command received");
                 return;
             }
-        }
-
-        // Hover if not in offboard mode (mode 1)
-        if (bebop_mode_ != 1) {
-            // Reset integral terms
-            err_sum_x_ = 0.0;
-            err_sum_y_ = 0.0;
-            RCLCPP_WARN(this->get_logger(), "Not in offboard mode.");
-            return;
         }
 
         // Coordinate transform
