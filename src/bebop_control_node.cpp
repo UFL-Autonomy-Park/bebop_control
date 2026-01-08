@@ -17,8 +17,9 @@ class BebopControlNode : public rclcpp::Node {
 public:
     BebopControlNode() : Node("bebop_control_node") {
         // bebop_autonomy parameters
-        this->declare_parameter<double>("max_tilt_deg");
-        this->declare_parameter<double>("max_vert_speed");
+        this->declare_parameter<double>("max_tilt_angle_deg");
+        this->declare_parameter<double>("max_vertical_speed_mps");
+        this->declare_parameter<double>("max_rotation_speed_dps");
 
         // PID gains
         this->declare_parameter<double>("kp_xy");
@@ -39,8 +40,9 @@ public:
         this->declare_parameter<std::string>("bebop_mode_topic");
         
         // Load parameters
-        max_tilt_rad_ = this->get_parameter("max_tilt_deg").as_double() * M_PI / 180.0;
-        max_vert_speed_ = this->get_parameter("max_vert_speed").as_double();
+        max_tilt_deg_ = this->get_parameter("max_tilt_angle_deg").as_double();
+        max_vert_speed_mps_ = this->get_parameter("max_vertical_speed_mps").as_double();
+        max_rotation_speed_dps_ = this->get_parameter("max_rotation_speed_dps").as_double();
 
         // Load gains
         kp_xy_ = this->get_parameter("kp_xy").as_double();
@@ -48,17 +50,14 @@ public:
         kd_xy_ = this->get_parameter("kd_xy").as_double();
 
         // Subscribers
-        // Odometry
         std::string odom_topic = this->get_parameter("odom_topic").as_string();
         odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
             odom_topic, rclcpp::SensorDataQoS(),
             std::bind(&BebopControlNode::odomCallback, this, std::placeholders::_1));
-        // Desired velocity
         std::string des_vel_topic = this->get_parameter("des_vel_topic").as_string();
         des_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
             des_vel_topic,10,
             std::bind(&BebopControlNode::desVelCallback, this, std::placeholders::_1));
-        // Bebop mode (int)
         std::string bebop_mode_topic = this->get_parameter("bebop_mode_topic").as_string();
         bebop_mode_sub_ = this->create_subscription<std_msgs::msg::Int32>(
             bebop_mode_topic,10,
@@ -67,6 +66,10 @@ public:
         // Publishers
         std::string cmd_vel_topic = this->get_parameter("cmd_vel_topic").as_string();
         cmd_vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(cmd_vel_topic, 10);
+
+        // Timmer Callback
+        timer_ = this->create_wall_timer(std::chrono::duration<double>(dt_), 
+                                     std::bind(&BebopControlNode::controlLoop, this));
         
         // Log
         RCLCPP_INFO(this->get_logger(), "Low-level Bebop controller active. Listening for %s", des_vel_topic.c_str());
@@ -85,6 +88,7 @@ private:
     // PID integral, derivative terms
     double err_sum_x_ = 0.0;
     double err_sum_y_ = 0.0;
+
     // Integrator Booleans
     bool integrator_on_x_ = true;
     bool integrator_on_y_ = true;
@@ -94,8 +98,9 @@ private:
     int sgn_u_pitch, sgn_u_roll;
 
     // Parameters
-    double max_tilt_rad_;
-    double max_vert_speed_;
+    double max_tilt_deg_;
+    double max_vert_speed_mps_;
+    double max_rotation_speed_dps_;
     double kp_xy_, ki_xy_, kd_xy_;
     int bebop_mode_ = 0;
     double dt_;
@@ -105,7 +110,7 @@ private:
         target_vel_world_ = *msg;
         last_cmd_time_ = this->now();
         cmd_received_ = true;
-        controlLoop();
+        // controlLoop();
     }
 
     void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
@@ -121,16 +126,6 @@ private:
         
         last_odom_time_ = this->now();
         odom_received_ = true;
-
-        if (bebop_mode_ == 1 && cmd_received_)
-        {
-            double time_since_cmd = (this->now() - last_cmd_time_).seconds();
-            if (time_since_cmd > 1.0)
-            {
-                stopDrone();
-                RCLCPP_ERROR_THROTTLE(this->get_logger(),*this->get_clock(),1000,"No recent command");
-            }
-        }
 
         // Store body frame vel
         current_vel_body_ = Eigen::Vector3d(
@@ -166,6 +161,16 @@ private:
             stopDrone();
             RCLCPP_WARN(this->get_logger(), "Stale odometry.");
             return;
+        }
+
+        // Safety timout
+        if (bebop_mode_ == 1 && cmd_received_) {
+            double time_since_cmd = (this->now() - last_cmd_time_).seconds();
+            if (time_since_cmd > 1.0) {
+                stopDrone(); // Publishes zero velocity
+                RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Safety Timeout: No command received");
+                return;
+            }
         }
 
         // Hover if not in offboard mode (mode 1)
@@ -219,15 +224,15 @@ private:
         bool sgn_in_matches_sgn_out_X = (sgn_error_x_ == sgn_u_pitch);
         bool sgn_in_matches_sgn_out_Y = (sgn_error_y_ == sgn_u_roll);
         // Check for zero division
-        if (max_tilt_rad_ < 1e-6 || max_vert_speed_ < 1e-6) {
+        if (max_tilt_deg_ < 1e-6 || max_vert_speed_ < 1e-6) {
             RCLCPP_WARN_THROTTLE(this->get_logger(),*this->get_clock(),1000, "Actuator limits are too small");
             stopDrone();
             return;
         }
-        double u_pitch_sat = std::clamp(u_pitch / max_tilt_rad_, -1.0, 1.0);
-        double u_roll_sat = std::clamp(u_roll / max_tilt_rad_, -1.0, 1.0);
-        is_saturated_x_ = (std::abs(u_pitch) >= max_tilt_rad_);
-        is_saturated_y_ = (std::abs(u_roll) >= max_tilt_rad_);
+        double u_pitch_sat = std::clamp(u_pitch / max_tilt_deg_, -1.0, 1.0);
+        double u_roll_sat = std::clamp(u_roll / max_tilt_deg_, -1.0, 1.0);
+        is_saturated_x_ = (std::abs(u_pitch) >= max_tilt_deg_);
+        is_saturated_y_ = (std::abs(u_roll) >= max_tilt_deg_);
         integrator_on_x_ = !(is_saturated_x_ && sgn_in_matches_sgn_out_X);
         integrator_on_y_ = !(is_saturated_y_ && sgn_in_matches_sgn_out_Y);
         

@@ -1,8 +1,9 @@
 /**:
   ros__parameters:
     # Limits
-    max_tilt_deg: 15.0
-    max_vert_speed: 1.0
+    max_tilt_angle_deg: 15.0
+    max_vertical_speed_mps: 1.0
+    max_rotation_speed_dps: 150.0
 
     # Gains (Body Frame)
     kp_xy: 0.15 # ENU
