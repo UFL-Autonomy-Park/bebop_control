@@ -30,7 +30,7 @@ public:
         double update_rate = this->declare_parameter<double>("update_rate"); // Hz
         dirty_N_ = cutoff_frequency * 2.0 * M_PI; // Convert to rad/s
         dt_ = 1.0 / update_rate;
-        dirty_ = std::make_unique<bebop_control::DirtyDerivative>(dirty_N_, dt_);
+        dirty_ = std::make_unique<bebop_control::DirtyDerivative>(dirty_N_);
 
         // Topics
         this->declare_parameter<std::string>("odom_topic");
@@ -205,7 +205,7 @@ private:
         
         // Derivative
         // elements are x, y, z accelerations in body frame
-        dirty_->propagate(current_vel_body_);
+        dirty_->propagate_filter(current_vel_body_, dt_);
         Eigen::Vector3d acceleration_estimate = dirty_->get_velocity_estimate(); 
         
         // PID output (desired tilt in rad)

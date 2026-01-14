@@ -7,20 +7,20 @@ namespace bebop_control {
 
 class DirtyDerivative {
 public:
-    // N = 1/tau (cutoff frequency in rad/s)
-    DirtyDerivative(double N, double dt);
+    explicit DirtyDerivative(double cutoff_freq_hz);
 
-    void propagate(const Eigen::Vector3d& x_meas);
+    void propagate_filter(const Eigen::Vector3d& x_meas, double dt);
 
-    Eigen::Vector3d get_velocity_estimate() const;
+    const Eigen::Vector3d& get_velocity_estimate() const;
+    const Eigen::Vector3d& get_position_estimate() const;
 
 private:
-    double a1_, a2_;
+    double tau_;
     bool initialized_;
     Eigen::Vector3d x_prev_;
     Eigen::Vector3d v_est_;
 };
 
-}
+} // namespace bebop_control
 
 #endif

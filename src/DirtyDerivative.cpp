@@ -1,24 +1,21 @@
 #include "bebop_control/DirtyDerivative.hpp"
+#include <cmath>
 
 namespace bebop_control {
 
-DirtyDerivative::DirtyDerivative(double N, double dt) 
-    : initialized_(false) {
-    
+DirtyDerivative::DirtyDerivative(double cutoff_freq_hz) 
+    : initialized_(false) 
+{
     x_prev_.setZero();
     v_est_.setZero();
 
-    // Tustin Discretization
-    // G(s) = s / (tau*s + 1), tau = 1/N
-    double tau = 1.0 / N;
-    a1_ = (2.0 * tau - dt) / (2.0 * tau + dt);
-    a2_ = 2.0 / (2.0 * tau + dt);
+    tau_ = 1.0 / (2.0 * M_PI * cutoff_freq_hz);
 }
 
-void DirtyDerivative::propagate(const Eigen::Vector3d& x_meas) {
-    // Make sure measurement is valid
+void DirtyDerivative::propagate_filter(const Eigen::Vector3d& x_meas, double dt) 
+{
     if (!x_meas.allFinite()) return;
-
+    
     if (!initialized_) {
         x_prev_ = x_meas;
         v_est_.setZero();
@@ -26,12 +23,23 @@ void DirtyDerivative::propagate(const Eigen::Vector3d& x_meas) {
         return;
     }
 
-    v_est_ = a1_ * v_est_ + a2_ * (x_meas - x_prev_);
+    // Tustin Discretization
+    // G(s) = s / (tau*s + 1)
+    double a1 = (2.0 * tau_ - dt) / (2.0 * tau_ + dt);
+    double a2 = 2.0 / (2.0 * tau_ + dt);
+
+    v_est_ = a1 * v_est_ + a2 * (x_meas - x_prev_);
     x_prev_ = x_meas;
 }
 
-Eigen::Vector3d DirtyDerivative::get_velocity_estimate() const {
+const Eigen::Vector3d& DirtyDerivative::get_velocity_estimate() const 
+{
     return v_est_;
 }
 
+const Eigen::Vector3d& DirtyDerivative::get_position_estimate() const 
+{
+    return x_prev_;
 }
+
+} // namespace bebop_control
