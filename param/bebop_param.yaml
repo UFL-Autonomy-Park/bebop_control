@@ -1,20 +1,17 @@
 /**:
   ros__parameters:
-    # Limits
-    max_tilt_angle_deg: 15.0
+    # Essentials
+    control_freq_hz: 50.0
+    kp_xy: 0.15
+    ki_xy: 0.006
+    
+    # Limits (for ros2_bebop_driver)
+    max_tilt_angle_deg: 17.5
     max_vertical_speed_mps: 1.0
     max_rotation_speed_dps: 150.0
 
-    # Gains (Body Frame)
-    kp_xy: 0.15 # ENU
-    ki_xy: 0.006 # ENU
-    kd_xy: 0.002 # ENU
-
-    update_rate: 50.0  # Control loop frequency in Hz
-    cutoff_frequency: 3.0 # Dirty derivative cutoff frequency in Hz
-
-    # Topics
-    odom_topic: "/bebop104/filtered_odom/rho"
-    des_vel_topic: "/bebop104/cmd_vel_des"
-    cmd_vel_topic: "/bebop104/cmd_vel"
-    bebop_mode_topic: "/bebop104/mode"
+    # Topics (I'm hoping my edits namespace these right)
+    odom_topic: "filtered_odom/rho"
+    des_vel_topic: "cmd_vel_des"
+    cmd_vel_topic: "cmd_vel"
+    bebop_mode_topic: "mode"
