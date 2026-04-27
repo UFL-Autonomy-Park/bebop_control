@@ -28,8 +28,8 @@ class BebopControlNode : public rclcpp::Node {
 public:
     BebopControlNode() : Node("bebop_control_node") {
         // Parameters needed for the ros2_bebop_driver
-        this->declare_parameter<double>("max_tilt_deg");
-        this->declare_parameter<double>("max_vert_speed");
+        this->declare_parameter<double>("max_tilt_angle_deg");
+        this->declare_parameter<double>("max_vertical_speed_mps");
 
         // PI gains
         this->declare_parameter<double>("kp_xy");
@@ -46,8 +46,8 @@ public:
         this->declare_parameter<std::string>("bebop_mode_topic");
         
         // Load parameters
-        max_tilt_rad_ = this->get_parameter("max_tilt_deg").as_double() * M_PI / 180.0;
-        max_vert_speed_ = this->get_parameter("max_vert_speed").as_double();
+        max_tilt_angle_rad_ = this->get_parameter("max_tilt_angle_deg").as_double() * M_PI / 180.0;
+        max_vertical_speed_mps_ = this->get_parameter("max_vertical_speed_mps").as_double();
 
         // Load gains
         kp_xy_ = this->get_parameter("kp_xy").as_double();
@@ -107,8 +107,8 @@ private:
     bool is_saturated_y_ = false;
 
     // Parameters
-    double max_tilt_rad_;
-    double max_vert_speed_;
+    double max_tilt_angle_rad_;
+    double max_vertical_speed_mps_;
     double kp_xy_, ki_xy_;
     double dt_;
     FlightMode current_mode_ = FlightMode::TELEOP; // 0 means pilot can manually control; 1 means off-board/autonomy mode
@@ -231,15 +231,15 @@ private:
         bool sgn_in_matches_sgn_out_X = (sgn_error_x == sgn_u_pitch);
         bool sgn_in_matches_sgn_out_Y = (sgn_error_y == sgn_u_roll);
         // Check for zero division
-        if (max_tilt_rad_ < MIN_ACTUATOR_LIMIT || max_vert_speed_ < MIN_ACTUATOR_LIMIT) {
+        if (max_tilt_angle_rad_ < MIN_ACTUATOR_LIMIT || max_vertical_speed_mps_ < MIN_ACTUATOR_LIMIT) {
             RCLCPP_WARN_THROTTLE(this->get_logger(),*this->get_clock(),LOG_THROTTLE_DURATION_MS, "Actuator limits are too small");
             stopDrone();
             return;
         }
-        double u_pitch_sat = std::clamp(u_pitch / max_tilt_rad_, -1.0, 1.0);
-        double u_roll_sat = std::clamp(u_roll / max_tilt_rad_, -1.0, 1.0);
-        is_saturated_x_ = (std::abs(u_pitch) >= max_tilt_rad_);
-        is_saturated_y_ = (std::abs(u_roll) >= max_tilt_rad_);
+        double u_pitch_sat = std::clamp(u_pitch / max_tilt_angle_rad_, -1.0, 1.0);
+        double u_roll_sat = std::clamp(u_roll / max_tilt_angle_rad_, -1.0, 1.0);
+        is_saturated_x_ = (std::abs(u_pitch) >= max_tilt_angle_rad_);
+        is_saturated_y_ = (std::abs(u_roll) >= max_tilt_angle_rad_);
         integrator_on_x_ = !(is_saturated_x_ && sgn_in_matches_sgn_out_X);
         integrator_on_y_ = !(is_saturated_y_ && sgn_in_matches_sgn_out_Y);
         
@@ -248,7 +248,7 @@ private:
         // Normalize
         cmd_vel.linear.x = u_pitch_sat;
         cmd_vel.linear.y = u_roll_sat;
-        cmd_vel.linear.z = std::clamp(target_vel_body.z() / max_vert_speed_,-1.0, 1.0);
+        cmd_vel.linear.z = std::clamp(target_vel_body.z() / max_vertical_speed_mps_,-1.0, 1.0);
         cmd_vel.angular.z = std::clamp(target_vel_world_.angular.y, -1.0, 1.0); // Yaw rate command directly
         
         // Check that values are finite
