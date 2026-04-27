@@ -15,13 +15,10 @@ using namespace std::chrono_literals;
 using TwistMsg = geometry_msgs::msg::Twist;
 using OdomMsg = nav_msgs::msg::Odometry;
 
-#define LOG_THROTTLE_DURATION_MS 1000
-#define STALE_COMMAND_TIMEOUT_SEC 1.0
-#define STALE_ODOM_TIMEOUT_SEC 0.5
-#define MIN_ACTUATOR_LIMIT 1e-6
-
-template <typename T> int sgn(T val) {
-    return (T(0) < val) - (val < T(0));
+namespace {
+    template <typename T> constexpr int sgn(T val) {
+        return (T(0) < val) - (val < T(0));
+    }
 }
 
 class BebopControlNode : public rclcpp::Node {
@@ -48,6 +45,11 @@ public:
         // Load parameters
         max_tilt_angle_rad_ = this->get_parameter("max_tilt_angle_deg").as_double() * M_PI / 180.0;
         max_vertical_speed_mps_ = this->get_parameter("max_vertical_speed_mps").as_double();
+
+        if (max_tilt_angle_rad_ <= 0.0 || max_vertical_speed_mps_ <= 0.0) {
+            RCLCPP_FATAL(this->get_logger(), "Actuator limits must be strictly positive");
+            throw std::invalid_argument("Actuator limits must be strictly positive");
+        }
 
         // Load gains
         kp_xy_ = this->get_parameter("kp_xy").as_double();
@@ -83,10 +85,14 @@ public:
         );
 
         // Log
-        RCLCPP_INFO(this->get_logger(), "Low-level Bebop controller active. Listening for %s", des_vel_topic.c_str());
+        RCLCPP_INFO_STREAM(this->get_logger(), "Low-level Bebop controller active. Listening for " << des_vel_topic);
     }
 
 private:
+    static constexpr int LOG_THROTTLE_DURATION_MS = 1000;
+    static constexpr double STALE_COMMAND_TIMEOUT_SEC = 1.0;
+    static constexpr double STALE_ODOM_TIMEOUT_SEC = 0.5;
+
     enum class FlightMode { TELEOP = 0, OFFBOARD = 1 };
 
     // State
@@ -129,15 +135,13 @@ private:
         if ( !std::isfinite(msg->twist.twist.linear.x) || 
              !std::isfinite(msg->twist.twist.linear.y) || 
              !std::isfinite(msg->twist.twist.linear.z) || 
+             !std::isfinite(msg->pose.pose.orientation.x) ||
+             !std::isfinite(msg->pose.pose.orientation.y) ||
+             !std::isfinite(msg->pose.pose.orientation.z) ||
              !std::isfinite(msg->pose.pose.orientation.w) ) 
         {
-            RCLCPP_WARN_THROTTLE(
-                this->get_logger(),
-                *this->get_clock(),
-                LOG_THROTTLE_DURATION_MS,
-                "Received infinity in a part of the odometry message."
-            );
-            return;
+            RCLCPP_FATAL(this->get_logger(), "Received infinity/NaN in odometry message. Crashing.");
+            throw std::runtime_error("Received infinity/NaN in odometry message");
         }
         
         if (current_mode_ == FlightMode::OFFBOARD && cmd_received_)
@@ -230,12 +234,6 @@ private:
         // Anti-windup
         bool sgn_in_matches_sgn_out_X = (sgn_error_x == sgn_u_pitch);
         bool sgn_in_matches_sgn_out_Y = (sgn_error_y == sgn_u_roll);
-        // Check for zero division
-        if (max_tilt_angle_rad_ < MIN_ACTUATOR_LIMIT || max_vertical_speed_mps_ < MIN_ACTUATOR_LIMIT) {
-            RCLCPP_WARN_THROTTLE(this->get_logger(),*this->get_clock(),LOG_THROTTLE_DURATION_MS, "Actuator limits are too small");
-            stopDrone();
-            return;
-        }
         double u_pitch_sat = std::clamp(u_pitch / max_tilt_angle_rad_, -1.0, 1.0);
         double u_roll_sat = std::clamp(u_roll / max_tilt_angle_rad_, -1.0, 1.0);
         is_saturated_x_ = (std::abs(u_pitch) >= max_tilt_angle_rad_);
@@ -257,8 +255,8 @@ private:
              !std::isfinite(cmd_vel.linear.z) || 
              !std::isfinite(cmd_vel.angular.z) ) 
         {
-            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(),LOG_THROTTLE_DURATION_MS,"Controller produced infinite cmd_vel");
-            stopDrone();
+            RCLCPP_FATAL(this->get_logger(), "Controller produced infinite cmd_vel");
+            throw std::runtime_error("Controller produced infinite cmd_vel");
         } else{
             // Publish
             cmd_vel_pub_->publish(cmd_vel);

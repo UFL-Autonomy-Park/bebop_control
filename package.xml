@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>bebop_control</name>
-  <version>0.1.0</version>
+  <version>1.0.0</version>
   <description>Runs a PI controller turning desired horizontal velocities into desired roll and pitch. Vertical velocity, yaw rate and passed straight to the Bebop Driver.</description>
   <maintainer email="mgardenswartz@ufl.edu">Max Gardenswartz, Brandon Fallin</maintainer>
   <license>TODO: License declaration</license>
