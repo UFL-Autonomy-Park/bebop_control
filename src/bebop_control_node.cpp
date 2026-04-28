@@ -24,30 +24,20 @@ namespace {
 class BebopControlNode : public rclcpp::Node {
 public:
     BebopControlNode() : Node("bebop_control_node") {
-        // Parameters needed for the ros2_bebop_driver
         this->declare_parameter<double>("max_tilt_angle");
         this->declare_parameter<double>("max_vertical_speed");
-
-        // PI gains
         this->declare_parameter<double>("kp_xy");
         this->declare_parameter<double>("ki_xy");
+        this->declare_parameter<double>("control_freq_hz");
 
-        // Controller running frequency
-        double control_freq_hz = this->declare_parameter<double>("control_freq_hz");
-        dt_ = 1.0 / control_freq_hz;
-        this->declare_parameter<std::string>("bebop_mode_topic_name");
-        
-        // Load parameters
-        max_tilt_angle_rad_ = this->get_parameter("max_tilt_angle").as_double() * M_PI / 180.0;
-        max_vertical_speed_ = this->get_parameter("max_vertical_speed").as_double();
-        if (max_tilt_angle_rad_ <= 0.0 || max_vertical_speed_ <= 0.0) {
-            RCLCPP_FATAL(this->get_logger(), "Actuator limits must be strictly positive");
-            throw std::invalid_argument("Actuator limits must be strictly positive");
-        }
-
-        // Load gains
         kp_xy_ = this->get_parameter("kp_xy").as_double();
         ki_xy_ = this->get_parameter("ki_xy").as_double();
+        double control_freq_hz_ = this->get_parameter("control_freq_hz").as_double();
+        double max_tilt_angle_deg_ = this->get_parameter("max_tilt_angle").as_double();
+        max_vertical_speed_mps_ = this->get_parameter("max_vertical_speed").as_double();
+
+        dt_ = 1.0 / control_freq_hz_;
+        max_tilt_angle_rad_ = max_tilt_angle_deg_ * M_PI / 180.0;
 
         // Subscribers
         // Odometry (Odometry)
@@ -104,7 +94,7 @@ private:
 
     // Parameters
     double max_tilt_angle_rad_;
-    double max_vertical_speed_;
+    double max_vertical_speed_mps_;
     double kp_xy_, ki_xy_;
     double dt_;
     FlightMode current_mode_ = FlightMode::TELEOP; // 0 means pilot can manually control; 1 means off-board/autonomy mode
@@ -163,11 +153,10 @@ private:
 
     void bebopModeCallback(const std_msgs::msg::Int32::SharedPtr msg) {
         // Check if we are switching from teleop (0) into offboard (1)
-        if (current_mode_ != FlightMode::OFFBOARD && msg->data == static_cast<int>(FlightMode::OFFBOARD))
+        if (current_mode_ == FlightMode::TELEOP && msg->data == static_cast<int>(FlightMode::OFFBOARD))
         {
             RCLCPP_INFO(this->get_logger(), "Switching to OFFBOARD, freshening control time stamp");
             last_cmd_time_ = this->now();
-            // Reset integral terms
             err_sum_x_ = 0.0;
             err_sum_y_ = 0.0;
         }
@@ -236,7 +225,7 @@ private:
         // Normalize
         cmd_vel.linear.x = u_pitch_sat;
         cmd_vel.linear.y = u_roll_sat;
-        cmd_vel.linear.z = std::clamp(target_vel_body.z() / max_vertical_speed_,-1.0, 1.0);
+        cmd_vel.linear.z = std::clamp(target_vel_body.z() / max_vertical_speed_mps_,-1.0, 1.0);
         cmd_vel.angular.z = std::clamp(target_vel_world_.angular.y, -1.0, 1.0); // Yaw rate command directly
         
         // Check that values are finite
@@ -254,7 +243,6 @@ private:
     }
 
     void stopDrone() {
-        // Reset integral terms
         err_sum_x_ = 0.0;
         err_sum_y_ = 0.0;
 
