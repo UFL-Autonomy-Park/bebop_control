@@ -25,8 +25,8 @@ class BebopControlNode : public rclcpp::Node {
 public:
     BebopControlNode() : Node("bebop_control_node") {
         // Parameters needed for the ros2_bebop_driver
-        this->declare_parameter<double>("max_tilt_angle_deg");
-        this->declare_parameter<double>("max_vertical_speed_mps");
+        this->declare_parameter<double>("max_tilt_angle");
+        this->declare_parameter<double>("max_vertical_speed");
 
         // PI gains
         this->declare_parameter<double>("kp_xy");
@@ -35,18 +35,12 @@ public:
         // Controller running frequency
         double control_freq_hz = this->declare_parameter<double>("control_freq_hz");
         dt_ = 1.0 / control_freq_hz;
-
-        // Topics
-        this->declare_parameter<std::string>("odom_topic");
-        this->declare_parameter<std::string>("des_vel_topic");
-        this->declare_parameter<std::string>("cmd_vel_topic");
-        this->declare_parameter<std::string>("bebop_mode_topic");
+        this->declare_parameter<std::string>("bebop_mode_topic_name");
         
         // Load parameters
-        max_tilt_angle_rad_ = this->get_parameter("max_tilt_angle_deg").as_double() * M_PI / 180.0;
-        max_vertical_speed_mps_ = this->get_parameter("max_vertical_speed_mps").as_double();
-
-        if (max_tilt_angle_rad_ <= 0.0 || max_vertical_speed_mps_ <= 0.0) {
+        max_tilt_angle_rad_ = this->get_parameter("max_tilt_angle").as_double() * M_PI / 180.0;
+        max_vertical_speed_ = this->get_parameter("max_vertical_speed").as_double();
+        if (max_tilt_angle_rad_ <= 0.0 || max_vertical_speed_ <= 0.0) {
             RCLCPP_FATAL(this->get_logger(), "Actuator limits must be strictly positive");
             throw std::invalid_argument("Actuator limits must be strictly positive");
         }
@@ -57,35 +51,31 @@ public:
 
         // Subscribers
         // Odometry (Odometry)
-        std::string odom_topic = this->get_parameter("odom_topic").as_string();
         odom_sub_ = this->create_subscription<OdomMsg>(
-            odom_topic,
+            "filtered_odom",
             rclcpp::SensorDataQoS(),
             std::bind(&BebopControlNode::odomCallback, this, std::placeholders::_1)
         );
         // Desired velocity (Twist)
-        std::string des_vel_topic = this->get_parameter("des_vel_topic").as_string();
         des_vel_sub_ = this->create_subscription<TwistMsg>(
-            des_vel_topic,
+            "cmd_vel_des",
             10, // Default QoS with N=10 queue
             std::bind(&BebopControlNode::desVelCallback, this, std::placeholders::_1)
         );
         // Bebop mode (Int32)
-        std::string bebop_mode_topic = this->get_parameter("bebop_mode_topic").as_string();
         bebop_mode_sub_ = this->create_subscription<std_msgs::msg::Int32>(
-            bebop_mode_topic,
+            "mode",
             10,
             std::bind(&BebopControlNode::bebopModeCallback, this, std::placeholders::_1)
         );
         // Publishers (Twist)
-        std::string cmd_vel_topic = this->get_parameter("cmd_vel_topic").as_string();
         cmd_vel_pub_ = this->create_publisher<TwistMsg>(
-            cmd_vel_topic,
+            "cmd_vel",
             10
         );
 
         // Log
-        RCLCPP_INFO_STREAM(this->get_logger(), "Low-level Bebop controller active. Listening for " << des_vel_topic);
+        RCLCPP_INFO_STREAM(this->get_logger(), "Low-level Bebop controller active. Listening for " << des_vel_topic_name);
     }
 
 private:
@@ -114,7 +104,7 @@ private:
 
     // Parameters
     double max_tilt_angle_rad_;
-    double max_vertical_speed_mps_;
+    double max_vertical_speed_;
     double kp_xy_, ki_xy_;
     double dt_;
     FlightMode current_mode_ = FlightMode::TELEOP; // 0 means pilot can manually control; 1 means off-board/autonomy mode
@@ -246,7 +236,7 @@ private:
         // Normalize
         cmd_vel.linear.x = u_pitch_sat;
         cmd_vel.linear.y = u_roll_sat;
-        cmd_vel.linear.z = std::clamp(target_vel_body.z() / max_vertical_speed_mps_,-1.0, 1.0);
+        cmd_vel.linear.z = std::clamp(target_vel_body.z() / max_vertical_speed_,-1.0, 1.0);
         cmd_vel.angular.z = std::clamp(target_vel_world_.angular.y, -1.0, 1.0); // Yaw rate command directly
         
         // Check that values are finite
