@@ -75,7 +75,7 @@ public:
         );
 
         // Log
-        RCLCPP_INFO_STREAM(this->get_logger(), "Low-level Bebop controller active. Listening for " << des_vel_topic_name);
+        RCLCPP_INFO_STREAM(this->get_logger(), "Low-level Bebop controller active. Listening for cmd_vel");
     }
 
 private:
