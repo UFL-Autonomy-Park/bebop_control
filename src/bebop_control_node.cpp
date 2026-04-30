@@ -170,13 +170,7 @@ private:
     void stopDrone() {
         err_sum_x_ = 0.0;
         err_sum_y_ = 0.0;
-
-        TwistMsg cmd_vel_zero;
-        cmd_vel_zero.linear.x = 0.0;
-        cmd_vel_zero.linear.y = 0.0;
-        cmd_vel_zero.linear.z = 0.0;
-        cmd_vel_zero.angular.z = 0.0;
-        cmd_vel_pub_->publish(cmd_vel_zero);
+        cmd_vel_pub_->publish(TwistMsg());
     }
 
     void desVelCallback(const TwistMsg::SharedPtr msg) {
