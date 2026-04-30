@@ -70,9 +70,9 @@ private:
     enum class FlightMode { TELEOP = 0, OFFBOARD = 1 };
 
     // State
-    TwistMsg target_vel_world_; // Desired veloicty in the world/mocap frame
+    TwistMsg target_vel_mocap_; // Desired veloicty in the world/mocap frame
     Eigen::Vector3d current_vel_body_; // Current vel in the body frame
-    Eigen::Quaterniond current_att_world_; // Orientation in the world/mocap frame
+    Eigen::Quaterniond rot_body_to_mocap_; // Orientation in the world/mocap frame
     rclcpp::Time last_odom_time_;
     rclcpp::Time last_cmd_time_;
     bool odom_received_ = false;
@@ -111,11 +111,11 @@ private:
         }
 
         // Active transform from world/mocap frame to body frame
-        current_att_world_.normalize(); 
-        Eigen::Vector3d target_vel_body = current_att_world_.inverse() * Eigen::Vector3d(
-            target_vel_world_.linear.x,
-            target_vel_world_.linear.y,
-            target_vel_world_.linear.z
+        rot_body_to_mocap_.normalize(); 
+        Eigen::Vector3d target_vel_body = rot_body_to_mocap_.inverse() * Eigen::Vector3d(
+            target_vel_mocap_.linear.x,
+            target_vel_mocap_.linear.y,
+            target_vel_mocap_.linear.z
         );
 
         // Calculate errors (body frame)
@@ -153,7 +153,7 @@ private:
         cmd_vel.linear.x = u_pitch_sat;
         cmd_vel.linear.y = u_roll_sat;
         cmd_vel.linear.z = std::clamp(target_vel_body.z() / max_vertical_speed_mps_,-1.0, 1.0);
-        cmd_vel.angular.z = std::clamp(target_vel_world_.angular.y, -1.0, 1.0); 
+        cmd_vel.angular.z = std::clamp(target_vel_mocap_.angular.y, -1.0, 1.0); 
         
         if ( !std::isfinite(cmd_vel.linear.x) || 
              !std::isfinite(cmd_vel.linear.y) || 
@@ -177,7 +177,7 @@ private:
         last_cmd_time_ = this->now();
         cmd_received_ = true;
 
-        target_vel_world_ = *msg;
+        target_vel_mocap_ = *msg;
         controlLoop();
     }
 
@@ -216,7 +216,7 @@ private:
             msg->twist.twist.linear.y,
             msg->twist.twist.linear.z
         );
-        current_att_world_ = Eigen::Quaterniond(
+        rot_body_to_mocap_ = Eigen::Quaterniond(
             msg->pose.pose.orientation.w,
             msg->pose.pose.orientation.x,
             msg->pose.pose.orientation.y,
