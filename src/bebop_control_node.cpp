@@ -24,17 +24,11 @@ namespace {
 class BebopControlNode : public rclcpp::Node {
 public:
     BebopControlNode() : Node("bebop_control_node") {
-        this->declare_parameter<double>("max_tilt_angle");
-        this->declare_parameter<double>("max_vertical_speed");
-        this->declare_parameter<double>("kp_xy");
-        this->declare_parameter<double>("ki_xy");
-        this->declare_parameter<double>("control_freq_hz");
-
-        kp_xy_ = this->get_parameter("kp_xy").as_double();
-        ki_xy_ = this->get_parameter("ki_xy").as_double();
-        double control_freq_hz_ = this->get_parameter("control_freq_hz").as_double();
-        double max_tilt_angle_deg_ = this->get_parameter("max_tilt_angle").as_double();
-        max_vertical_speed_mps_ = this->get_parameter("max_vertical_speed").as_double();
+        max_tilt_angle_deg_ = this->declare_parameter<double>("max_tilt_angle");
+        max_vertical_speed_mps_ = this->declare_parameter<double>("max_vertical_speed");
+        kp_ = this->declare_parameter<double>("control_gains.kp_tilt_effort");
+        ki_ = this->declare_parameter<double>("control_gains.ki_tilt_effort");
+        control_freq_hz_ =  this->declare_parameter<double>("control_freq_hz");
 
         dt_ = 1.0 / control_freq_hz_;
         max_tilt_angle_rad_ = max_tilt_angle_deg_ * M_PI / 180.0;
@@ -86,8 +80,10 @@ private:
     bool is_saturated_y_ = false;
 
     double max_tilt_angle_rad_;
+    double max_tilt_angle_deg_;
     double max_vertical_speed_mps_;
-    double kp_xy_, ki_xy_;
+    double control_freq_hz_;
+    double kp_, ki_;
     double dt_;
     FlightMode current_mode_ = FlightMode::TELEOP;
 
@@ -134,8 +130,8 @@ private:
         }
         
         // PI output (desired tilt in rad)
-        double u_pitch = (kp_xy_ * err_x + ki_xy_ * err_sum_x_);
-        double u_roll  = (kp_xy_ * err_y + ki_xy_ * err_sum_y_);
+        double u_pitch = (kp_ * err_x + ki_ * err_sum_x_);
+        double u_roll  = (kp_ * err_y + ki_ * err_sum_y_);
         int sgn_u_pitch = sgn(u_pitch);
         int sgn_u_roll = sgn(u_roll);
 
