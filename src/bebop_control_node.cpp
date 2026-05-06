@@ -29,6 +29,9 @@ public:
         kp_ = this->declare_parameter<double>("control_gains.kp_tilt_effort");
         ki_ = this->declare_parameter<double>("control_gains.ki_tilt_effort");
         control_freq_hz_ =  this->declare_parameter<double>("control_freq_hz");
+        LOG_THROTTLE_DURATION_MS = this->declare_parameter<int>("log_throttle_duration_ms");
+        STALE_COMMAND_TIMEOUT_SEC = this->declare_parameter<double>("stale_command_timeout_sec");
+        STALE_ODOM_TIMEOUT_SEC = this->declare_parameter<double>("stale_odom_timeout_sec");
 
         dt_ = 1.0 / control_freq_hz_;
         max_tilt_angle_rad_ = max_tilt_angle_deg_ * M_PI / 180.0;
@@ -57,10 +60,6 @@ public:
     }
 
 private:
-    static constexpr int LOG_THROTTLE_DURATION_MS = 1000;
-    static constexpr double STALE_COMMAND_TIMEOUT_SEC = 1.0;
-    static constexpr double STALE_ODOM_TIMEOUT_SEC = 0.5;
-
     enum class FlightMode { TELEOP = 0, OFFBOARD = 1 };
 
     // State
@@ -85,6 +84,9 @@ private:
     double control_freq_hz_;
     double kp_, ki_;
     double dt_;
+    int LOG_THROTTLE_DURATION_MS;
+    double STALE_COMMAND_TIMEOUT_SEC;
+    double STALE_ODOM_TIMEOUT_SEC;
     FlightMode current_mode_ = FlightMode::TELEOP;
 
     rclcpp::Subscription<OdomMsg>::SharedPtr odom_sub_;
